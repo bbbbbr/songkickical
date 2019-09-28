@@ -1,0 +1,6 @@
+{
+  "name": "Music Event ical",
+  "description": "Music Event iCal",
+  "keywords": ["node", "ical", "heroku"],
+  "image": "heroku/nodejs"
+}
