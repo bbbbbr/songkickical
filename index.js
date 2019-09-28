@@ -78,17 +78,15 @@ function songkick_event_checkattending (cal_event) {
     var attend_str = '';
 
     try {
-        console.log ('attending: ');
-        console.log (cal_event.reason.attendance);
         if (cal_event.reason.attendance === 'i_might_go' ||
             cal_event.reason.attendance === 'im_going') {
 
             // Add some hearts if attending
-            attend_str = '♥♥ ';
+            attend_str = '♥ ';
         }
     }
     catch(err) {
-        console.log('songkick_event_add() -> attendance not present ' + err);
+        // console.log('songkick_event_add() -> attendance not present ' + err);
     };
 
     return (attend_str);
@@ -112,7 +110,7 @@ function songkick_event_add (cal_event) {
         });
     }
     catch(err) {
-        console.log('songkick create calendar event failed' + err);
+        // console.log('songkick create calendar event failed' + err);
     };
 
 }
@@ -154,7 +152,7 @@ function songkick_parse_events (req_response_bodyJSON, client_response) {
 function songkick_request_events (req_url, client_response) {
 
     try {
-        console.log ('Calling songkick_request_events()');
+        // console.log ('Calling songkick_request_events()');
         request(req_url, { json: true }, (err, res, bodyJSON) => {
 
             if (err) { return console.log(err); }
