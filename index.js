@@ -1,8 +1,8 @@
 //
 // Songkick API -> iCal bridge
 //
-// This software is licensed under the GPLv3 (c) 2019
-// https://www.gnu.org/licenses/gpl-3.0.en.html
+// This software is licensed under CC-BY-NC-SA (c) 2019
+// https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
 //
 
 const ical    = require('ical-generator');
