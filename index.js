@@ -79,9 +79,9 @@ function songkick_event_checkattending (cal_event) {
 
     try {
         console.log ('attending: ');
-        console.log (cal_event.event.reason.attendance);
-        if (cal_event.event.reason.attendance === 'i_might_go' ||
-            cal_event.event.reason.attendance === 'im_going') {
+        console.log (cal_event.reason.attendance);
+        if (cal_event.reason.attendance === 'i_might_go' ||
+            cal_event.reason.attendance === 'im_going') {
 
             // Add some hearts if attending
             attend_str = '♥♥ ';
