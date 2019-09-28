@@ -78,15 +78,17 @@ function songkick_event_checkattending (cal_event) {
     var attend_str = '';
 
     try {
-        if (cal_event.event.reason.attendance === "i_might_go" ||
-            cal_event.event.reason.attendance === "im_going") {
+        console.log ('attending: ');
+        console.log (cal_event.event.reason.attendance);
+        if (cal_event.event.reason.attendance === 'i_might_go' ||
+            cal_event.event.reason.attendance === 'im_going') {
 
             // Add some hearts if attending
             attend_str = '♥♥ ';
         }
     }
     catch(err) {
-        // console.log('songkick_event_add() -> attendance not present ' + err);
+        console.log('songkick_event_add() -> attendance not present ' + err);
     };
 
     return (attend_str);
