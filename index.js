@@ -73,7 +73,29 @@ function songkick_event_log (cal_event) {
 }
 
 
+function songkick_event_checkattending (cal_event) {
+    // TODO: color for marked vs unmarked events?  "COLOR:turquoise" (not supported by ical generator)
+    var attend_str = '';
+
+    try {
+        if (cal_event.event.reason.attendance === "i_might_go" ||
+            cal_event.event.reason.attendance === "im_going") {
+
+            // Add some hearts if attending
+            attend_str = '♥♥ ';
+        }
+    }
+    catch(err) {
+        // console.log('songkick_event_add() -> attendance not present ' + err);
+    };
+
+    return (attend_str);
+}
+
+
 function songkick_event_add (cal_event) {
+
+    var attend_str = songkick_event_checkattending (cal_event);
 
     try {
         var tdate = cal_event.event.start.datetime;
@@ -81,8 +103,8 @@ function songkick_event_add (cal_event) {
         // Create an event
         cal.createEvent({
             start: moment(tdate),
-            summary: cal_event.event.displayName,
-            description: cal_event.event.displayName + ", " + cal_event.event.uri,
+            summary: attend_str + cal_event.event.displayName,
+            description: attend_str + cal_event.event.displayName + ", " + cal_event.event.uri,
             location: cal_event.event.venue.displayName + ", " + cal_event.event.venue.metroArea.displayName,
             url: cal_event.event.uri
         });
