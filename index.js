@@ -48,7 +48,7 @@ function cal_obj_get_new () {
         var cal_obj = {
             valid    : false,
             datetime : new Date(),
-            cal      : ical({ name: 'Music Event ical' }),
+            cal      : ical({domain: 'songkickicalweb.herokuapp.com', name: 'Music Event ical'}),
             expired  : function () {
                 return (((new Date()) - this.datetime) > CAL_POOL_CACHE_LIFE_HOURS)
                 }
