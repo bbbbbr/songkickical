@@ -15,7 +15,6 @@ const request     = require('request');
 const PORT         = process.env.PORT || 5000;
 const SONGKICK_KEY = process.env.SONGKICK_API_KEY;
 // const cal     = ical({domain: 'TODO.com', name: 'Music Event iCal'});
-const ical         = require('ical-generator');
 
 
 // Query string parameters
@@ -33,7 +32,7 @@ const DATE_ONE_HOUR = 60 * 60 * 1000; // msecs
 const CAL_POOL_CACHE_LIFE_HOURS = 24 * DATE_ONE_HOUR;
 const CAL_POOL_SIZE = 2; // Maximum number of calendars to store.
 
-var cal_pool = new Map(); // Use a Map since it maintains iteration order of entries (oldest -> newest)
+var calendar_pool = new Map(); // Use a Map since it maintains iteration order of entries (oldest -> newest)
 
 
 // TODO: option to show events marked as going/interested only
@@ -52,12 +51,26 @@ function cal_obj_get_new () {
             cal      : ical({ name: 'Music Event ical' }),
             expired  : function () {
                 return (((new Date()) - this.datetime) > CAL_POOL_CACHE_LIFE_HOURS)
-            }
-
+                }
         }
+    }
     catch (err) { return false; }
 
     return (cal_obj);
+}
+
+
+function cal_pool_prune_if_needed (cal_map) {
+    try {
+        // Prune oldest (first) entry from pool queue if space is needed
+        if (cal_map.size > CAL_POOL_SIZE) {
+            for (const [key] of cal_map) {
+                cal_map.delete(key);
+                break; // Break after first iteration
+            }
+        }
+    }
+    catch (err) { console.log('cal_pool_prune_if_needed() failed: ' + err); }
 }
 
 
@@ -75,20 +88,25 @@ function cal_pool_get_entry (cal_map, username) {
 
     try {
         // Check if entry exists
-        if (typeof cal_map.get(username) !== 'undefined')
+        if (typeof cal_map.get(username) !== 'undefined') {
 
             // If it's expired, get a new entry
             // If not expired, get a copy of the existing one
-            if (cal_map.get(username).expired())
+            if (cal_map.get(username).expired()) {
+                console.log ('cal_pool_get_entry() - found but expired');
                 cal_obj = cal_obj_get_new();
-            else
+            }
+            else {
+                console.log ('cal_pool_get_entry() - found and not expired, copying');
                 cal_obj = cal_map.get(username);
+            }
 
             // Delete it's old location in the queue
             cal_map.delete(username);
         } else {
             // If it doesn't exist, create a new entry
-            cal_obj = cal_map.get(username);
+            console.log ('cal_pool_get_entry() - not found, creating new');
+            cal_obj = cal_obj_get_new();
         }
 
         // Add or re-add the entry to the newer end of the queue
@@ -104,22 +122,6 @@ function cal_pool_get_entry (cal_map, username) {
     return (undefined);
 }
 
-
-
-
-
-
-function cal_pool_prune_if_needed (cal_map) {
-    try {
-        // Prune oldest (first) entry from pool queue if space is needed
-        if (cal_map.prototype.size > CAL_POOL_SIZE) {
-            for (const [key] of cal_map) {
-                cal_map.delete(key);
-                break; // Break after first iteration
-            }
-        }
-    catch (err) { console.log('cal_pool_prune_oldest() failed: ' + err); }
-}
 
 
 function serve_error (client_response) {
@@ -274,14 +276,12 @@ function songkick_build_request_url (user_params) {
         req_params[p_apikey]   = SONGKICK_KEY;
         req_params[p_reason]   = 'tracked_artist'; // 'tracked_artist' or 'attendance'
 
-        if (user_params[q_username] != '') {
+        // Copy in username
+        if (user_params[q_username] != '')
             req_params[p_username] = user_params[q_username];
-            // console.log('1 username:' + user_params[q_username]);
-        }
         else
             throw "empty username param";
-
-        // Insert the param values into the request url string
+                    // Insert the param values into the request url string
         req_url = req_url.replace(p_apikey, req_params[p_apikey]);
         req_url = req_url.replace(p_username, req_params[p_username]);
         req_url = req_url.replace(p_reason, req_params[p_reason]);
@@ -299,6 +299,7 @@ function songkick_build_request_url (user_params) {
 
 
 
+
 // Parse the query string from a client request
 // into a hash of parameters
 function user_request_get_params(req) {
@@ -307,7 +308,6 @@ function user_request_get_params(req) {
     var req_querystring;
 
      try {
-
         console.log(req.url);
 
         // Remove everything before the query string
@@ -318,7 +318,7 @@ function user_request_get_params(req) {
 
         // Sanitize inputs that are used
         // username: filter out unwanted username characters
-        user_params[p_username] = user_params[p_username].replace(/[^a-z0-9\-\_]+/g, '');
+        user_params[q_username] = user_params[q_username].replace(/[^a-z0-9\-\_]+/g, '');
     }
     catch(err) {
         console.log('user_request_get_params() failed');
@@ -335,39 +335,56 @@ function user_request_get_params(req) {
 // Serve the calendar
 http.createServer(function(req, res) {
 
-    // Get the username from query string
-    var client_username = user_request_get_params(req);
+    try {
+        // Get the username from query string
+        var user_params = user_request_get_params(req);
 
-    // Abort if it's empty
-    if (client_username === '')
-        serve_error(res);
+        // Abort if it's empty
+        if ((user_params[q_username] === '') &&
+            !(q_username in user_params) ) {
+            console.log ('main - username empty');
+            throw "Empty username param";
+        }
 
-    // Get calendar object from pool
-    var cal_obj = cal_pool_get_entry(client_username);
+        // Get calendar object from pool
+        var cal_obj = cal_pool_get_entry(calendar_pool, user_params[q_username]);
 
-    // Abort if obtaining a calendar object failed
-    if (typeof cal_obj === 'undefined')
-        serve_error(res);
-    else {
-
-        // Serve cached calendar if valid
-        if (cal_obj.valid == true) {
-            serve_calendar(client_response, cal_obj.cal);
-            console.log ('serving existing calendar');
+        // Abort if obtaining a calendar object failed
+        if (typeof cal_obj === 'undefined') {
+    console.log ('main - cal_obj undefined');
+            serve_error(res);
         }
         else {
 
-            // Otherwise start a new request
-            var req_url = songkick_build_request_url(client_username);
-
-            if (req_url) {
-                // This will either serve up a calendar or an error in response
-                songkick_request_events(req_url, res, cal_obj)
+    console.log ('main - found cal object');
+            // Serve cached calendar if valid
+            if (cal_obj.valid == true) {
+                serve_calendar(res, cal_obj.cal);
+                console.log ('main - serving existing calendar');
             }
-            else
-                serve_error(res);
+            else {
+                console.log ('main - requesting new calendar');
+                // Otherwise start a new request
+                var req_url = songkick_build_request_url(user_params);
+
+                if (req_url) {
+                    // This will either serve up a calendar or an error in response
+                    songkick_request_events(req_url, res, cal_obj)
+                }
+                else
+                    serve_error(res);
+            }
         }
     }
+    catch(err) {
+        console.log('serve - failed' + err);
+        serve_error(res);
+    };
+
+    console.log(' ');
+    console.log('==== CACHE POOL: ==== ');
+    console.log(calendar_pool.size)
+    console.log(calendar_pool)
 
 }).listen(PORT, () => {
   console.log(`Server running on ${PORT}/`);
