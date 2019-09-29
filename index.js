@@ -12,13 +12,15 @@ const http        = require('http');
 const querystring = require('querystring');
 const request     = require('request');
 
-const PORT    = process.env.PORT || 5000;
+const PORT         = process.env.PORT || 5000;
 const SONGKICK_KEY = process.env.SONGKICK_API_KEY;
-const cal     = ical({domain: 'TODO.com', name: 'Music Event ical'});
+// const cal     = ical({domain: 'TODO.com', name: 'Music Event iCal'});
+const ical         = require('ical-generator');
 
 
 // Query string parameters
-const q_username = "username"
+const q_username = "username"  // Songkick username
+const q_display  = "display"   // "all", "onlyfaved", "<empty, treated as all>"
 
 // Songkick Api parameter
 const p_apikey   = "PARAM_APIKEY"
@@ -26,11 +28,98 @@ const p_username = "PARAM_USERNAME"
 const p_reason   = "PARAM_REASON"
 
 
-// TODO: cache reponse data + time/date, + name re-request if over threshold (up to N limit entries)
-// TODO: color for marked vs unmarked events  COLOR:turquoise (reason.attendance = "i_might_go" "im_going"
+// Simple calendar result caching
+const DATE_ONE_HOUR = 60 * 60 * 1000; // msecs
+const CAL_POOL_CACHE_LIFE_HOURS = 24 * DATE_ONE_HOUR;
+const CAL_POOL_SIZE = 2; // Maximum number of calendars to store.
 
+var cal_pool = new Map(); // Use a Map since it maintains iteration order of entries (oldest -> newest)
+
+
+// TODO: option to show events marked as going/interested only
+//       const q_display  = "display"   // "all", "onlyfaved", "<empty, treated as all>"
 // overwrite domain
-cal.domain('TODOTODOTODO.net');
+// cal.domain('TODOTODOTODO.net');
+
+
+// Create a new calendar cache entry and return the object
+function cal_obj_get_new () {
+
+    try {
+        var cal_obj = {
+            valid    : false,
+            datetime : new Date(),
+            cal      : ical({ name: 'Music Event ical' }),
+            expired  : function () {
+                return (((new Date()) - this.datetime) > CAL_POOL_CACHE_LIFE_HOURS)
+            }
+
+        }
+    catch (err) { return false; }
+
+    return (cal_obj);
+}
+
+
+// Get a calendar entry object:
+//
+// * Exists and not expired: Returns object, .valid == true
+// * Exists and expired:     Returns object, .valid == false
+//                           + (re-inserts to newer end of pool)
+// * Doesn't exist:          Returns object, .valid == false
+//                           + (Creates new, prunes from old end of pool if needed)
+// * Something went wrong:   Returns undefined
+function cal_pool_get_entry (cal_map, username) {
+
+    var cal_obj;
+
+    try {
+        // Check if entry exists
+        if (typeof cal_map.get(username) !== 'undefined')
+
+            // If it's expired, get a new entry
+            // If not expired, get a copy of the existing one
+            if (cal_map.get(username).expired())
+                cal_obj = cal_obj_get_new();
+            else
+                cal_obj = cal_map.get(username);
+
+            // Delete it's old location in the queue
+            cal_map.delete(username);
+        } else {
+            // If it doesn't exist, create a new entry
+            cal_obj = cal_map.get(username);
+        }
+
+        // Add or re-add the entry to the newer end of the queue
+        cal_map.set(username, cal_obj);
+
+        cal_pool_prune_if_needed(cal_map);
+
+        return cal_map.get(username); // Return the entry
+    }
+    catch (err) { console.log('cal_pool_get_entry() failed: ' + err); }
+
+    // Error condition, return undefined by default
+    return (undefined);
+}
+
+
+
+
+
+
+function cal_pool_prune_if_needed (cal_map) {
+    try {
+        // Prune oldest (first) entry from pool queue if space is needed
+        if (cal_map.prototype.size > CAL_POOL_SIZE) {
+            for (const [key] of cal_map) {
+                cal_map.delete(key);
+                break; // Break after first iteration
+            }
+        }
+    catch (err) { console.log('cal_pool_prune_oldest() failed: ' + err); }
+}
 
 
 function serve_error (client_response) {
@@ -45,7 +134,7 @@ function serve_error (client_response) {
 
 }
 
-function serve_calendar (client_response) {
+function serve_calendar (client_response, cal) {
     try {
         cal.serve(client_response);
     }
@@ -67,9 +156,7 @@ function songkick_event_log (cal_event) {
         console.log("location: " + cal_event.event.venue.displayName + ", " + cal_event.event.venue.metroArea.displayName);
         console.log("url: " + cal_event.event.uri);
     }
-    catch(err) {
-        console.log('songkick log calendar event failed' + err);
-    };
+    catch(err) { console.log('songkick log calendar event failed' + err); };
 }
 
 
@@ -93,7 +180,7 @@ function songkick_event_checkattending (cal_event) {
 }
 
 
-function songkick_event_add (cal_event) {
+function songkick_event_add (cal_event, cal_obj) {
 
     var attend_str = songkick_event_checkattending (cal_event);
 
@@ -101,7 +188,7 @@ function songkick_event_add (cal_event) {
         var tdate = cal_event.event.start.datetime;
 
         // Create an event
-        cal.createEvent({
+        cal_obj.cal.createEvent({
             start: moment(tdate),
             summary: attend_str + cal_event.event.displayName,
             description: attend_str + cal_event.event.displayName + ", " + cal_event.event.uri,
@@ -116,7 +203,7 @@ function songkick_event_add (cal_event) {
 }
 
 
-function songkick_parse_events (req_response_bodyJSON, client_response) {
+function songkick_parse_events (req_response_bodyJSON, client_response, cal_obj) {
 
     var data = {};
     try {
@@ -125,19 +212,20 @@ function songkick_parse_events (req_response_bodyJSON, client_response) {
 
         req_response_bodyJSON.resultsPage.results.calendarEntry.forEach(function (sk_cals) {
 
-
             try {
                 // songkick_event_log(sk_cals);
-
-                songkick_event_add(sk_cals);
+                songkick_event_add(sk_cals, cal_obj);
             }
             catch(err) {
                 console.log('songkick create calendar event failed' + err);
             };
         });
 
+        // Set calendar to valid
+        cal_obj.valid = true;
+
         // End of adding the calendar items, serve up the response
-        serve_calendar(client_response);
+        serve_calendar(client_response, cal_obj.cal);
     }
     catch(err) {
         console.log('songkick_parse_events() failed' + err);
@@ -149,7 +237,7 @@ function songkick_parse_events (req_response_bodyJSON, client_response) {
 
 
 
-function songkick_request_events (req_url, client_response) {
+function songkick_request_events (req_url, client_response, cal_obj) {
 
     try {
         // console.log ('Calling songkick_request_events()');
@@ -160,7 +248,7 @@ function songkick_request_events (req_url, client_response) {
             // console.log(bodyJSON);
 
             // Handle the JSON calendar response
-            songkick_parse_events(bodyJSON, client_response);
+            songkick_parse_events(bodyJSON, client_response, cal_obj);
         });
     }
     catch(err) {
@@ -192,9 +280,6 @@ function songkick_build_request_url (user_params) {
         }
         else
             throw "empty username param";
-
-        // filter out non-numeric values
-        req_params[p_username] = req_params[p_username].replace(/[^a-zA-Z0-9]+/g, '');
 
         // Insert the param values into the request url string
         req_url = req_url.replace(p_apikey, req_params[p_apikey]);
@@ -230,6 +315,10 @@ function user_request_get_params(req) {
 
         // Parse query string
         user_params = querystring.parse(req_querystring);
+
+        // Sanitize inputs that are used
+        // username: filter out unwanted username characters
+        user_params[p_username] = user_params[p_username].replace(/[^a-z0-9\-\_]+/g, '');
     }
     catch(err) {
         console.log('user_request_get_params() failed');
@@ -246,18 +335,39 @@ function user_request_get_params(req) {
 // Serve the calendar
 http.createServer(function(req, res) {
 
-    // Reset the calendar
-    cal.clear();
+    // Get the username from query string
+    var client_username = user_request_get_params(req);
 
-    var req_url = songkick_build_request_url( user_request_get_params(req) );
-
-    if (req_url) {
-        // This will either serve up a calendar or an error in response
-        songkick_request_events(req_url, res)
-    }
-    else
+    // Abort if it's empty
+    if (client_username === '')
         serve_error(res);
 
+    // Get calendar object from pool
+    var cal_obj = cal_pool_get_entry(client_username);
+
+    // Abort if obtaining a calendar object failed
+    if (typeof cal_obj === 'undefined')
+        serve_error(res);
+    else {
+
+        // Serve cached calendar if valid
+        if (cal_obj.valid == true) {
+            serve_calendar(client_response, cal_obj.cal);
+            console.log ('serving existing calendar');
+        }
+        else {
+
+            // Otherwise start a new request
+            var req_url = songkick_build_request_url(client_username);
+
+            if (req_url) {
+                // This will either serve up a calendar or an error in response
+                songkick_request_events(req_url, res, cal_obj)
+            }
+            else
+                serve_error(res);
+        }
+    }
 
 }).listen(PORT, () => {
   console.log(`Server running on ${PORT}/`);
