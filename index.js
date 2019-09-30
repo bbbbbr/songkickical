@@ -37,6 +37,11 @@ var calendar_pool = new Map(); // Use a Map since it maintains iteration order o
 
 // TODO: option to show events marked as going/interested only
 //       const q_display  = "display"   // "all", "onlyfaved", "<empty, treated as all>"
+//
+// TODO: Consider ironcache developer (100MB) + node.js interface
+//       * https://github.com/fiveisprime/iron-cache
+//       * https://github.com/glynnbird/ironcache
+//
 // overwrite domain
 // cal.domain('TODOTODOTODO.net');
 
