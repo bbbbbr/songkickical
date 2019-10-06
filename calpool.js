@@ -1,6 +1,7 @@
 // calpool.js
 // ========
 
+const ical    = require('ical-generator');
 
 // Simple calendar result caching
 const DATE_ONE_HOUR = 60 * 60 * 1000; // msecs

@@ -5,7 +5,7 @@
 // https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
 //
 
-const ical    = require('ical-generator');
+// const ical    = require('ical-generator');
 const moment  = require('moment');
 
 const http        = require('http');
