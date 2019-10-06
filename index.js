@@ -14,22 +14,12 @@ const calpool      = require('./calpool');
 const songkick     = require('./songkickapi');
 const config       = require('./config');
 
-// const cal     = ical({domain: 'TODO.com', name: 'Music Event iCal'});
-
 
 var calendar_pool  = new Map(); // Use a Map since it maintains iteration order of entries (oldest -> newest)
 
 
 // TODO: option to show events marked as going/interested only
 //       const q_display  = "display"   // "all", "onlyfaved", "<empty, treated as all>"
-//
-// TODO: Consider ironcache developer (100MB) + node.js interface
-//       * https://github.com/fiveisprime/iron-cache
-//       * https://github.com/glynnbird/ironcache
-//
-// overwrite domain
-// cal.domain('TODOTODOTODO.net');
-
 
 
 function serve_error (client_response) {
@@ -52,8 +42,6 @@ function serve_calendar (client_response, cal) {
         console.log('serve_calendar() failed !' + err);
     };
 }
-
-
 
 
 
@@ -89,20 +77,21 @@ function user_request_get_params(req) {
 
 
 
-// Serve the calendar
+// Request the events and then serve the calendar
 http.createServer(function(req, res) {
 
     try {
 
+        // Set up http response functions for calendar to call
         songkick.set_serve_functions(serve_calendar, serve_error);
 
         // Get the username from query string
         var user_params = user_request_get_params(req);
 
-        // Abort if it's empty
-        if ((user_params[config.q_username] === '') &&
+        // Abort if username is empty
+        if ((user_params[config.q_username] === '') ||
             !(config.q_username in user_params) ) {
-            console.log ('main - username empty');
+            // console.log ('main - username empty');
             throw "Empty username param";
         }
 
@@ -111,19 +100,19 @@ http.createServer(function(req, res) {
 
         // Abort if obtaining a calendar object failed
         if (typeof cal_obj === 'undefined') {
-            console.log ('main - cal_obj undefined');
+            // console.log ('main - cal_obj undefined');
             serve_error(res);
         }
         else {
 
-            console.log ('main - found cal object');
+            // console.log ('main - found cal object');
             // Serve cached calendar if valid
             if (cal_obj.valid == true) {
                 serve_calendar(res, cal_obj.cal);
-                console.log ('main - serving existing calendar');
+                // console.log ('main - serving existing calendar');
             }
             else {
-                console.log ('main - requesting new calendar');
+                // console.log ('main - requesting new calendar');
                 // Otherwise start a new request
                 var req_url = songkick.build_request_url(user_params);
 
@@ -141,10 +130,10 @@ http.createServer(function(req, res) {
         serve_error(res);
     };
 
-    console.log(' ');
-    console.log('==== CACHE POOL: ==== ');
-    console.log(calendar_pool.size)
-    console.log(calendar_pool)
+    // console.log(' ');
+    // console.log('==== CACHE POOL: ==== ');
+    // console.log(calendar_pool.size)
+    // console.log(calendar_pool)
 
 }).listen(PORT, () => {
   console.log(`Server running on ${PORT}/`);
