@@ -10,9 +10,9 @@ const config       = require('./config');
 const SONGKICK_KEY = process.env.SONGKICK_API_KEY;
 
 // Songkick Api parameters
-const p_apikey   = "PARAM_APIKEY",
-const p_username = "PARAM_USERNAME",
-const p_reason   = "PARAM_REASON"
+const p_apikey   = "PARAM_APIKEY";
+const p_username = "PARAM_USERNAME";
+const p_reason   = "PARAM_REASON";
 
 
 var serve_calendar_fn;
