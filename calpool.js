@@ -48,7 +48,7 @@ module.exports = {
             // Add or re-add the entry to the newer end of the queue
             cal_map.set(username, cal_obj);
 
-            cal_pool_prune_if_needed(cal_map);
+            prune_if_needed(cal_map);
 
             return cal_map.get(username); // Return the entry
         }
