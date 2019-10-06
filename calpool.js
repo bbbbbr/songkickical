@@ -5,7 +5,7 @@
 // Simple calendar result caching
 const DATE_ONE_HOUR = 60 * 60 * 1000; // msecs
 const CAL_POOL_CACHE_LIFE_HOURS = 24 * DATE_ONE_HOUR;
-const CAL_POOL_SIZE = 2; // Maximum number of calendars to store.
+const CAL_POOL_SIZE = 1000; // Maximum number of calendars to store.
 
 
 module.exports = {
